@@ -3,15 +3,17 @@ export const permitsViewTemplate = `
     <div class="panel">
       <h3>排放许可册</h3>
       <table>
-        <thead><tr><th>许可号</th><th>厂</th><th>配额</th><th>COD帽</th><th>期别</th><th>状态</th></tr></thead>
+        <thead><tr><th>许可号</th><th>厂</th><th>配额</th><th>COD帽</th><th>期别</th><th>状态</th><th>已扣配额笔数</th></tr></thead>
         <tbody>
           <tr v-for="p in permits" :key="p.id">
             <td>{{ p.permit_code }}</td><td>{{ p.plant_code }}</td><td>{{ p.quota_m3d }}</td>
             <td>{{ p.cod_cap }}</td><td>{{ p.period_label }}</td>
             <td :class="statusClass(p.status)">{{ p.status }}</td>
+            <td :class="p.quota_deducted ? 'pass' : 'muted'">{{ p.quota_deducted || 0 }}</td>
           </tr>
         </tbody>
       </table>
+      <p class="muted" style="margin-top:0.5rem">配额扣减推迟到外送回执到达、正式结案升正之时；影子草稿零扣减。</p>
     </div>
     <div class="panel">
       <h3>登记许可</h3>

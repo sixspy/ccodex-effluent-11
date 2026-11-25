@@ -10,6 +10,32 @@ from models import PermitIn
 router = APIRouter(tags=["permits"])
 
 
+def deduct_quota(
+    conn, permit_code: str, sample_id: int, flow_m3h: float, officer: str
+) -> None:
+    """effluent-11：配额扣减只在回执到达、正式升正的同事务内发生。
+
+    无回执的影子草稿永不扣减；UNIQUE(sample_id) 保证同批只扣一次。
+    """
+    permit = conn.execute(
+        "SELECT id FROM discharge_permits WHERE permit_code=?", (permit_code,)
+    ).fetchone()
+    if not permit:
+        raise HTTPException(400, f"许可不存在，无法扣配额：{permit_code}")
+    conn.execute(
+        """INSERT INTO permit_quota_ledger(permit_code,sample_id,flow_m3h,officer,deducted_at)
+           VALUES (?,?,?,?,?)""",
+        (permit_code, sample_id, flow_m3h, officer, now_iso()),
+    )
+    write_audit(
+        conn,
+        officer,
+        "permit_quota_deduct",
+        permit_code,
+        {"sample_id": sample_id, "flow_m3h": flow_m3h},
+    )
+
+
 @router.get("/api/permits")
 def list_permits(authorization: AuthHeader = None):
     require_user(authorization)
@@ -18,7 +44,15 @@ def list_permits(authorization: AuthHeader = None):
             """SELECT d.*, p.plant_code, p.name plant_name FROM discharge_permits d
                JOIN plants p ON p.id=d.plant_id ORDER BY d.id"""
         ).fetchall()
-        return {"items": [dict(r) for r in rows]}
+        items = []
+        for r in rows:
+            d = dict(r)
+            d["quota_deducted"] = conn.execute(
+                "SELECT COUNT(*) c FROM permit_quota_ledger WHERE permit_code=?",
+                (d["permit_code"],),
+            ).fetchone()["c"]
+            items.append(d)
+        return {"items": items}
 
 
 @router.get("/api/permits/{permit_code}")

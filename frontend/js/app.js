@@ -66,6 +66,8 @@ createApp({
     });
     const labForm = ref({ sample_code: "SM-OF-E1-A-001", courier_slot: "A1" });
     const sludgeForm = ref({ plant_id: 1, digester_bay: "D-01" });
+    const completeForm = ref({ sample_id: 0, mode: "formal" });
+    const receiptForm = ref({ job_id: 0, receipt_no: "" });
 
     function logout() {
       token.value = "";
@@ -81,6 +83,13 @@ createApp({
     const sealableSamples = computed(() =>
       samples.value.filter((s) => ["已裁定", "已准排"].includes(s.status))
     );
+    const completableSamples = computed(() =>
+      samples.value.filter((s) => s.status === "已封批")
+    );
+    // effluent-11：回执列空的外送作业（待回），五页同态口径
+    const pendingLabJobs = computed(() =>
+      labJobs.value.filter((j) => !j.receipt_status)
+    );
 
     function statusClass(s) {
       if (!s) return "muted";
@@ -91,6 +100,7 @@ createApp({
     function sampleClass(s) {
       if (!s) return "muted";
       if (s.includes("挂起")) return "fail";
+      if (s.includes("结案")) return "pass";
       if (s.includes("准排") || s.includes("裁定") || s.includes("封批")) return "pass";
       return "muted";
     }
@@ -144,6 +154,12 @@ createApp({
       if (!sealForm.value.sample_id && sealableSamples.value.length) {
         sealForm.value.sample_id = sealableSamples.value[0].id;
       }
+      if (!completeForm.value.sample_id && completableSamples.value.length) {
+        completeForm.value.sample_id = completableSamples.value[0].id;
+      }
+      if (!receiptForm.value.job_id && labJobs.value.length) {
+        receiptForm.value.job_id = labJobs.value[0].id;
+      }
     }
 
     async function loadPlant(id) { plantDetail.value = await api.plant(id); }
@@ -196,6 +212,17 @@ createApp({
         mode: "dry_run",
       }));
     }
+    async function markLabReceipt() {
+      await flash(() => api.labReceipt(receiptForm.value.job_id, {
+        receipt_no: receiptForm.value.receipt_no || `RC-${receiptForm.value.job_id}`,
+      }));
+    }
+    async function completeCase() {
+      await flash(() => api.completeCase({
+        sample_id: completeForm.value.sample_id,
+        mode: completeForm.value.mode,
+      }));
+    }
     async function enqueueSludge() {
       await flash(() => api.sludgeEnqueue({
         plant_id: sludgeForm.value.plant_id,
@@ -223,10 +250,12 @@ createApp({
       reconOne, reconAllItems, proofOne, reconCode, proofCode,
       plantForm, outfallForm, sampleForm, releaseForm, sealForm, permitForm,
       lineageForm, labForm, sludgeForm, releasableSamples, sealableSamples,
+      completeForm, receiptForm, completableSamples, pendingLabJobs,
       login, logout, refresh, statusClass, sampleClass, fmtMetrics,
       loadPlant, loadSample, createPlant, createOutfall, createSample,
       closeExceed, createRelease, createSeal, createPermit, createLineage,
       loadReconcile, loadReconcileOne, loadProof, enqueueLab, enqueueSludge,
+      markLabReceipt, completeCase,
     };
   },
   template: `

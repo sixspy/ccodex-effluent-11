@@ -56,6 +56,12 @@ class SealIn(BaseModel):
     snapshot: str | None = None
 
 
+class CompleteIn(BaseModel):
+    sample_id: int
+    # formal=甲路径（无回执当场拒写）；shadow=乙路径（只登记影子草稿）
+    mode: str = "formal"
+
+
 class PermitIn(BaseModel):
     permit_code: str
     plant_id: int

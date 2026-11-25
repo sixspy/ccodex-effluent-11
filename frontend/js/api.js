@@ -48,6 +48,8 @@ export function createApi(getToken, onUnauthorized) {
     proof: (code) => request("/api/proof/sample/" + encodeURIComponent(code)),
     labJobs: () => request("/api/stubs/lab-courier"),
     labEnqueue: (body) => request("/api/stubs/lab-courier", { method: "POST", body: JSON.stringify(body) }),
+    labReceipt: (jobId, body) => request("/api/stubs/lab-courier/" + jobId + "/receipt", { method: "POST", body: JSON.stringify(body) }),
+    completeCase: (body) => request("/api/releases/complete", { method: "POST", body: JSON.stringify(body) }),
     sludgeJobs: () => request("/api/stubs/sludge-plan"),
     sludgeEnqueue: (body) => request("/api/stubs/sludge-plan", { method: "POST", body: JSON.stringify(body) }),
     audit: () => request("/api/audit"),

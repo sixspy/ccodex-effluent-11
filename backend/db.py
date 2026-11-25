@@ -186,6 +186,48 @@ CREATE TABLE IF NOT EXISTS sludge_plan_jobs(
   detail TEXT,
   created_at TEXT NOT NULL
 );
+-- effluent-11：外送化验空桩回执列（回执到达与结案写库两边不得混用）
+CREATE TABLE IF NOT EXISTS lab_courier_receipts(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL UNIQUE,
+  sample_code TEXT NOT NULL,
+  receipt_no TEXT NOT NULL,
+  receipt_status TEXT NOT NULL,
+  arrived_at TEXT NOT NULL,
+  FOREIGN KEY(job_id) REFERENCES lab_courier_jobs(id)
+);
+-- effluent-11：结案正式册（SM-K11 完成态只许落此正式区）
+CREATE TABLE IF NOT EXISTS case_complete_registry(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sample_id INTEGER NOT NULL UNIQUE,
+  complete_ref TEXT NOT NULL,
+  status TEXT NOT NULL,
+  receipt_no TEXT NOT NULL,
+  officer TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  FOREIGN KEY(sample_id) REFERENCES sample_batches(id)
+);
+-- effluent-11：乙路径影子区（无回执只许登记影子，原子升正前草稿可作废）
+CREATE TABLE IF NOT EXISTS shadow_case_closings(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sample_id INTEGER NOT NULL,
+  shadow_ref TEXT NOT NULL,
+  status TEXT NOT NULL,
+  officer TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  voided_at TEXT,
+  FOREIGN KEY(sample_id) REFERENCES sample_batches(id)
+);
+-- effluent-11：许可配额扣减台账（扣减推迟到回执到达、正式升正之时）
+CREATE TABLE IF NOT EXISTS permit_quota_ledger(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  permit_code TEXT NOT NULL,
+  sample_id INTEGER NOT NULL,
+  flow_m3h REAL NOT NULL,
+  officer TEXT NOT NULL,
+  deducted_at TEXT NOT NULL,
+  UNIQUE(sample_id)
+);
 """
 
 
@@ -482,6 +524,18 @@ def dashboard_stats(conn: sqlite3.Connection) -> dict:
             "SELECT COUNT(*) c FROM sludge_plan_jobs"
         ).fetchone()["c"],
     }
+    # effluent-11：总览待回外送数（空桩页口径，逐采样去重）
+    pending_lab = conn.execute(
+        """SELECT COUNT(DISTINCT j.sample_code) c FROM lab_courier_jobs j
+           LEFT JOIN lab_courier_receipts r ON r.job_id=j.id
+           WHERE r.id IS NULL"""
+    ).fetchone()["c"]
+    formal_closed = conn.execute(
+        "SELECT COUNT(*) c FROM case_complete_registry WHERE status='已结案'"
+    ).fetchone()["c"]
+    shadow_pending = conn.execute(
+        "SELECT COUNT(*) c FROM shadow_case_closings WHERE status='待回报草稿'"
+    ).fetchone()["c"]
     return {
         "plants": plants,
         "outfalls": outfalls,
@@ -492,5 +546,8 @@ def dashboard_stats(conn: sqlite3.Connection) -> dict:
         "permits": permits,
         "side_pending": pending,
         "stubs": stubs,
+        "pending_lab_receipts": pending_lab,
+        "formal_closed": formal_closed,
+        "shadow_pending": shadow_pending,
         "meta": PRODUCT_META,
     }
